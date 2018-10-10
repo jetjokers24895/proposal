@@ -105,82 +105,52 @@ function matchingCase(nameOfProject) {
   return _lstInfo;
 }
 
-
 function actionOnReady() {
   // let namesOfProject = getAtrribute(projectsAll,'Name');
   // let infoOfLedger = getAtrribute(casesAll,'Info');
   console.log(buildSelectHtml(projectsAll,'Name'));
-  Vue.config.devtools = true;
+  Vue.config.devtools = true
 
-  Vue.component('proposal',{
-    props:['title'],
-    template: '#proposal',
-    data: () => { 
-      return {
-        caseId: function() {
-              if (typeof proposal === 'undefined') {
-                return "case1"
-              } else {
-                return "case" + proposals.number.toString()
-              }  
-            },
-        projectId: function() {
-              if (typeof proposal === 'undefined') {
-                return "project1"
-              } else {
-                return "project " + proposals.number.toString()
-              }  
-            },
-        htmlCase : null,
-        htmlProject : buildSelectHtml(projectsAll,'Name'),
-        selectedCase : {
-          id: null,
-          name: null
-        },
-        selectedProject : {
-          id: null,
-          name: null,
-        }
+  var cases = new Vue({
+    el: "#cases",
+    data: {
+      htmls : null,
+      selected : {
+        id: null,
+        name: null
       }
     },
     methods: {
-
-      dereaseProposal: function () {
-        proposals.number -= 1;
-      },
-
       selectCase : function() {
-        console.log('props', this.caseId);
-        let _element = document.getElementById(this.caseId);
+        let _element = document.getElementById('cases');
         let _value = _element.options[_element.selectedIndex].value;
         let _text = _element.options[_element.selectedIndex].text;
-        this.selectedCase.id = _value;
-        this.selectedCase.name = _text;
-      },
-
-      selectAction : function() {
-        let _element = document.getElementById(this.projectId);
-        let _value = _element.options[_element.selectedIndex].value;
-        let _text = _element.options[_element.selectedIndex].text;
-        this.selectedProject.id = _value;
-        this.selectedProject.name = _text;
-        console.log()
-        let lstCaseOfProject = matchingCase(this.selectedProject.name);
-        this.htmlCase = buildSelectHtml(lstCaseOfProject,'Info')
-        //console.log(this.selected.id);
-        //console.log($("#projects").val());
+        this.selected.id = _value;
+        this.selected.name = _text;
       }
     }
-  });
-
-  var proposals = new Vue({
-    el: "#proposals",
-    data : {
-      number : 1,
+  })
+  // console.log(cases);
+  var projects = new Vue({
+    el : "#projects",
+    data: {
+      htmls : buildSelectHtml(projectsAll,'Name'),
+      selected : {
+        id : null,
+        name: null
+      }
     },
     methods: {
-      addNumber: function() {
-        this.number +=1
+      selectAction : function() {
+        let _element = document.getElementById('projects');
+        let _value = _element.options[_element.selectedIndex].value;
+        let _text = _element.options[_element.selectedIndex].text;
+        this.selected.id = _value;
+        this.selected.name = _text;
+        let lstCaseOfProject = matchingCase(this.selected.name);
+        cases.htmls = buildSelectHtml(lstCaseOfProject,'Info')
+        console.log(this.selected.id);
+        //console.log($("#projects").val());
       }
     }
   });
