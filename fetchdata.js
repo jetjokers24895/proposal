@@ -9,26 +9,43 @@ var base  = new Airtable({
 )
 var casesAll = [];
 var projectsAll = [];
+var accountsAll = [];
 
 
-// function listAccount() {
-//   base('Tài Khoản').select({
-//     view : "Full",
-//     cellFormat : "json"
+function submit(name,caseId,projectId) {
+  base('Đề xuất').create({
+    "Người đề xuất": name,
+    "Hạng mục chi": [
+      caseId
+    ],
+    "Dự án": [
+      projectId
+    ]
+  }, function(err, record) {
+      if (err) { console.error(err); return; }
+      console.log('post sucess',record.getId());
+  });
+}
 
-//   }).eachPage(function page(records, fetchNextPage) {
-//     records.forEach(record => {
-//       console.log('#####');
-//       console.log(record.get('Tài khoản'));
-//     });
-//     fetchNextPage();
-//   }, function done(err) {
-//     if(err) {
-//       throw new Error('Fetching was failed',err)
-//     }
-//   })
-// }
-listProjects()
+listAccount()
+function listAccount() {
+  base('Tài Khoản').select({
+    view : "Full",
+    cellFormat : "json"
+
+  }).eachPage(function page(records, fetchNextPage) {
+    records.forEach(record => {
+      //console.log(record.get('Tài khoản'));
+      accountsAll.push(record);
+    });
+    fetchNextPage();
+  }, function done(err) {
+    if (err) { console.error(err); return; }
+    listProjects()
+});
+}
+
+
 function listProjects() {
   base('Dự án').select({
     view: "Grid view",
@@ -51,6 +68,7 @@ function listProjects() {
     listCases()
 });
 }
+
 
 function listCases(projectName) {
   base('Sổ cái').select({
@@ -84,21 +102,53 @@ function getAtrribute(data,attr) {
   return _return.filter(record => typeof record !== 'undefined')
 }
 
-function buildSelectHtml(data,property) {
+function buildHtml(data,property) {
   return data.map(record => {
     // return `<option value=${record.id}>${record.get(property)}</option>`
     return {
       id : record.id,
-      text:record.get(property)
+      text: record.get(property)
     }
   })
 }
 
-function matchingCase(nameOfProject) {
+function buildFilterObject(recordsOfledger) {
+  let rs = Object.assign([]);
+  rs['noSuplier'] = [];
+  recordsOfledger.map(record => {
+    let _sendTo = record.get('Nộp vào');
+    if (typeof _sendTo !== 'undefined') {
+      _sendTo  = _sendTo.length < 2 ? _sendTo.toString() : false;
+      if(_sendTo === false ) {console.log('Nap vao nhieu hon 1 tai khoan')}
+      let _suplier = getSuplierByid(_sendTo)
+      if (Object.keys(rs).indexOf(_suplier) > -1) {       
+        rs[_suplier].push(record);
+      } else {
+        rs[_suplier] = [record];
+      }
+    } else {
+      rs['noSuplier'].push(record)
+    }
+  })
+  return rs;
+}
+
+function getSuplierByid(id) {
+  if (typeof id !== 'undefined') {
+    // if (id.length > 1) {console.log('Nop vao 2 tai khoan')}
+    let _id = id.toString();
+    let _rs = accountsAll.filter(record => record.id == _id);
+    return _rs[0].get('Tài khoản');
+  } else {
+    return 'Không Có Nhà Cung Cấp'
+  }
+}
+
+function matchingLedger(idOfProject) {
   let _lstInfo = [];
   casesAll.forEach(record => {
-    let _info = record.get('Info')
-    if(_info.indexOf(nameOfProject) >=0) {
+    let _projects = record.get('Dự án');
+    if(_projects.indexOf(idOfProject) >=0) {
       _lstInfo.push(record)
     }
   });
@@ -109,7 +159,7 @@ function matchingCase(nameOfProject) {
 function actionOnReady() {
   // let namesOfProject = getAtrribute(projectsAll,'Name');
   // let infoOfLedger = getAtrribute(casesAll,'Info');
-  console.log(buildSelectHtml(projectsAll,'Name'));
+  //console.log(buildSelectHtml(projectsAll,'Name'));
   Vue.config.devtools = true;
 
   Vue.component('proposal',{
@@ -117,58 +167,62 @@ function actionOnReady() {
     template: '#proposal',
     data: () => { 
       return {
-        caseId: function() {
-              if (typeof proposal === 'undefined') {
-                return "case1"
-              } else {
-                return "case" + proposals.number.toString()
-              }  
-            },
-        projectId: function() {
-              if (typeof proposal === 'undefined') {
-                return "project1"
-              } else {
-                return "project " + proposals.number.toString()
-              }  
-            },
+        number: typeof proposals === 'undefined' ? 1 : proposals.number, 
+        failMessage: '',
+        htmlProject : buildHtml(projectsAll,'Name'),
+        htmlSuplier : null,
         htmlCase : null,
-        htmlProject : buildSelectHtml(projectsAll,'Name'),
+        recordsAfterFilterProject: null,
         selectedCase : {
           id: null,
-          name: null
+          text: null
         },
+
+        selectedSuplier: {
+          id: null,
+          text: null,
+        },
+
         selectedProject : {
           id: null,
-          name: null,
+          text: null,
         }
       }
     },
     methods: {
 
-      dereaseProposal: function () {
+      decreaseProposal: function () {
         proposals.number -= 1;
       },
 
-      selectCase : function() {
-        console.log('props', this.caseId);
-        let _element = document.getElementById(this.caseId);
-        let _value = _element.options[_element.selectedIndex].value;
-        let _text = _element.options[_element.selectedIndex].text;
-        this.selectedCase.id = _value;
-        this.selectedCase.name = _text;
+      selectCase: function() {
+        let _event = {id : this.number, projectId : this.selectedProject.id, caseId: this.selectedCase.id};
+        this.$emit('pass-data-to-parent',_event);
       },
 
-      selectAction : function() {
-        let _element = document.getElementById(this.projectId);
-        let _value = _element.options[_element.selectedIndex].value;
-        let _text = _element.options[_element.selectedIndex].text;
-        this.selectedProject.id = _value;
-        this.selectedProject.name = _text;
-        console.log()
-        let lstCaseOfProject = matchingCase(this.selectedProject.name);
-        this.htmlCase = buildSelectHtml(lstCaseOfProject,'Info')
-        //console.log(this.selected.id);
-        //console.log($("#projects").val());
+      selectSuplier: function() {
+        // console.log(this.selectedSuplier.text);
+        let _selectedSuplier = this.selectedSuplier.text;
+        // console.log(this.recordsAfterFilterProject);
+        let _listRecord = this.recordsAfterFilterProject[_selectedSuplier] || this.recordsAfterFilterProject['noSuplier'] ;
+        // console.log(_listRecord.length)
+        // console.log('records',this.recordsAfterFilterProject['ACB-Ván sàn Vinyl Triết'])
+        this.htmlCase = buildHtml(_listRecord,'Info');
+      },
+
+      selectProject : function() {
+        let _seletedProjectId = this.selectedProject.id
+        let lstLedgerRecord = matchingLedger(_seletedProjectId);
+        this.recordAfterFilterProject = lstLedgerRecord;
+        //console.log(lstLedgerRecord);
+        if (lstLedgerRecord != []) {
+          // select all record that it's "dự án" have project id
+          this.recordsAfterFilterProject =  Object.assign([],buildFilterObject(lstLedgerRecord)) // [suplier1:[record1,record2]]
+          // console.log('recors',this.recordAfterFilterProject)
+          let _keys = Object.keys(this.recordsAfterFilterProject);
+          this.htmlSuplier = _keys.length !== 0 ? _keys : ['Khong Co Nha Cung'];
+          //console.log("values",Object.keys(this.recordsAfterFilterProject) == [] );
+        } 
       }
     }
   });
@@ -177,10 +231,33 @@ function actionOnReady() {
     el: "#proposals",
     data : {
       number : 1,
+      data: Object.assign([])
     },
     methods: {
       addNumber: function() {
         this.number +=1
+      },
+      
+      addData: function(dataPassed) {
+        console.log('run')
+        let dataToAdd = {projectId:dataPassed.projectId, caseId : dataPassed.caseId};
+        this.data[--dataPassed.id] = dataToAdd;
+      },
+
+      submitToAirtable(){
+        for(let i= 0; i < this.number; i++) {
+        let _projectId =  this.data[i].projectId;
+        let _caseId = this.data[i].caseId;
+        if(_projectId == null || _caseId == null) {
+          this.failMessage = 'Khong the Post';
+          return;
+        }
+        submit('Quyên', _caseId, _projectId);
+        }
+      },
+
+      callEvent: function(){
+        console.log('run')
       }
     }
   });
